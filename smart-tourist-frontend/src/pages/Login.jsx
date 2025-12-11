@@ -19,7 +19,7 @@ function Login({ onLoginSuccess, onRegisterClick }) {
       localStorage.setItem('user', JSON.stringify(response.data.user));
       onLoginSuccess();
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }

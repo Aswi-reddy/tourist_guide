@@ -60,6 +60,9 @@ export const placesAPI = {
   getNearby: (lat, lng, radius = 5000, type = 'tourist_attraction') =>
     api.post('/places/nearby', { lat, lng, radius, type }),
   
+  getSafeZones: (lat, lng, radius = 5000) =>
+    api.post('/places/safe-zones', { lat, lng, radius }),
+  
   getWeather: (lat, lng) =>
     api.post('/places/weather', { lat, lng })
 };

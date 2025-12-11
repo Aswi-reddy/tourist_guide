@@ -27,9 +27,7 @@ function Register({ onRegisterSuccess, onLoginClick }) {
       localStorage.setItem('user', JSON.stringify(response.data.user));
       onRegisterSuccess();
     } catch (err) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Registration failed';
-      setError(errorMsg);
-      console.error('Registration error:', err);
+      setError(err.response?.data?.error || err.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }

@@ -8,6 +8,10 @@ router.post('/report', auth, async (req, res) => {
   try {
     const { type, severity, title, description, latitude, longitude, address } = req.body;
     
+    if (!type || !severity || !title || !description || !latitude || !longitude) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
     const incident = new Incident({
       reportedBy: req.user.id,
       type,
@@ -16,7 +20,7 @@ router.post('/report', auth, async (req, res) => {
       description,
       location: {
         type: 'Point',
-        coordinates: [longitude, latitude],
+        coordinates: [parseFloat(longitude), parseFloat(latitude)],
         address
       }
     });

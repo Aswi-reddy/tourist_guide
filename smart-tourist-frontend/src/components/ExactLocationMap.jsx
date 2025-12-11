@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleMap, useJsApiLoader, Marker, Circle } from '@react-google-maps/api';
 import { authAPI } from '../services/api';
-import './GoogleMap.css';
 
 const libraries = ['places'];
 
@@ -39,11 +38,6 @@ function ExactLocationMap() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, accuracy: acc } = position.coords;
-        
-        console.log('📍 Location Update:');
-        console.log('  Lat:', latitude.toFixed(8));
-        console.log('  Lng:', longitude.toFixed(8));
-        console.log('  Accuracy:', acc.toFixed(1) + 'm');
         
         const newLocation = { lat: latitude, lng: longitude };
         setLocation(newLocation);

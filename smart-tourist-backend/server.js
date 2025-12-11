@@ -20,16 +20,15 @@ const io = socketIO(server, {
 app.use(express.json());
 app.use(cors());
 
-// Simple logging
-console.log('🚀 Starting Smart Tourist Safety System...');
-
-// Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'Server is running ✓', time: new Date() });
+  res.json({ status: 'running', time: new Date() });
 });
 
 // Connect MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+})
   .then(() => console.log('✓ MongoDB connected'))
   .catch(err => console.log('✗ MongoDB error:', err.message));
 
@@ -41,9 +40,6 @@ app.use('/api/places', require('./routes/places'));
 
 // Socket.io - Real-time updates
 io.on('connection', (socket) => {
-  console.log('📱 User connected:', socket.id);
-
-  // Location updates
   socket.on('location-update', (data) => {
     io.emit('user-location', {
       userId: data.userId,
@@ -52,9 +48,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Emergency SOS alerts
   socket.on('emergency-sos', (data) => {
-    console.log('🆘 Emergency SOS from:', data.userId);
     io.emit('sos-alert', {
       userId: data.userId,
       userName: data.userName,
@@ -63,10 +57,6 @@ io.on('connection', (socket) => {
       timestamp: Date.now(),
       message: 'EMERGENCY! Someone needs help nearby!'
     });
-  });
-
-  socket.on('disconnect', () => {
-    console.log('📱 User disconnected:', socket.id);
   });
 });
 

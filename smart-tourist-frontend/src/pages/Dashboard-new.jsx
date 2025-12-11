@@ -26,7 +26,6 @@ function Dashboard({ onLogout }) {
   const [nearbyUsers, setNearbyUsers] = useState([]);
   const [sosAlertData, setSOSAlertData] = useState(null);
   const [showSOSAlert, setShowSOSAlert] = useState(false);
-  const [locationInitialized, setLocationInitialized] = useState(false);
   const [form, setForm] = useState({
     type: 'accident',
     severity: 'medium',
@@ -126,56 +125,25 @@ function Dashboard({ onLogout }) {
   }, [userLocation]);
 
   const startLocationTracking = () => {
-    if (navigator.geolocation) {
-      // Get initial high-accuracy position
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          setUserLocation({ lat: latitude, lng: longitude });
-          setLocationAccuracy(accuracy);
-          
-          // Only show notification on first location lock
-          if (!locationInitialized) {
-            addNotification(`📍 Location locked! Accuracy: ${Math.round(accuracy)}m`, 'success');
-            setLocationInitialized(true);
-          }
-          
-          fetchNearbyIncidents();
-          socket.emit('location-update', { userId: user.id, userName: user.name, lat: latitude, lng: longitude });
-        },
-        (error) => {
-          console.error('Location error:', error);
-          if (!locationInitialized) {
-            addNotification('❌ Location access denied. Enable GPS for full features.', 'error');
-          }
-        },
-        { 
-          enableHighAccuracy: true, 
-          timeout: 10000, 
-          maximumAge: 0 
-        }
-      );
-
-      // Continuous tracking with high accuracy
-      navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          setUserLocation({ lat: latitude, lng: longitude });
-          setLocationAccuracy(accuracy);
-          fetchNearbyIncidents();
-          socket.emit('location-update', { userId: user.id, userName: user.name, lat: latitude, lng: longitude });
-        },
-        (error) => console.error('Location tracking error:', error),
-        { 
-          enableHighAccuracy: true, 
-          timeout: 5000, 
-          maximumAge: 1000,
-          distanceFilter: 10 // Update only when moved 10+ meters
-        }
-      );
-    } else {
-      addNotification('❌ Geolocation not supported by your browser', 'error');
+    if (!navigator.geolocation) {
+      addNotification('❌ Geolocation not supported', 'error');
+      return;
     }
+
+    navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setUserLocation({ lat: latitude, lng: longitude });
+        setLocationAccuracy(accuracy);
+        fetchNearbyIncidents();
+        socket.emit('location-update', { userId: user.id, userName: user.name, lat: latitude, lng: longitude });
+      },
+      (error) => {
+        console.error('Location error:', error);
+        addNotification('❌ Location access denied', 'error');
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 1000 }
+    );
   };
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -224,7 +192,7 @@ function Dashboard({ onLogout }) {
       setMyIncidents(mine);
       if (userLocation) fetchNearbyIncidents();
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error fetching incidents:', err);
       setIncidents([]);
       setMyIncidents([]);
     }
@@ -242,26 +210,46 @@ function Dashboard({ onLogout }) {
 
   const handleReportIncident = async (e) => {
     e.preventDefault();
-    try {
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        const { latitude, longitude } = position.coords;
-        await incidentsAPI.report(form.type, form.severity, form.title, form.description, latitude, longitude, form.address);
-        addNotification('✓ Incident reported!', 'success');
-        setShowReportForm(false);
-        setForm({ type: 'accident', severity: 'medium', title: '', description: '', address: '' });
-        fetchIncidents();
-      });
-    } catch (err) {
-      addNotification('❌ Failed to report', 'error');
+    
+    if (!form.title.trim() || !form.description.trim()) {
+      addNotification('❌ Please fill in all required fields', 'error');
+      return;
     }
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          
+          await incidentsAPI.report(
+            form.type, 
+            form.severity, 
+            form.title, 
+            form.description, 
+            latitude, 
+            longitude, 
+            form.address
+          );
+          
+          addNotification('✓ Incident reported successfully!', 'success');
+          setShowReportForm(false);
+          setForm({ type: 'accident', severity: 'medium', title: '', description: '', address: '' });
+          await fetchIncidents();
+        } catch (err) {
+          console.error('Error reporting incident:', err);
+          addNotification('❌ Failed to report incident', 'error');
+        }
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        addNotification('❌ Please enable location access', 'error');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const addNotification = (message, type = 'info') => {
-    // Check if this exact notification already exists to prevent duplicates
-    const exists = notifications.some(n => n.message === message && Date.now() - n.timestamp < 1000);
-    if (exists) return;
-    
-    const newNotif = { id: Date.now(), message, type, timestamp: Date.now() };
+    const newNotif = { id: Date.now(), message, type };
     setNotifications(prev => [newNotif, ...prev].slice(0, 5));
     setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== newNotif.id)), 5000);
   };
@@ -302,12 +290,12 @@ function Dashboard({ onLogout }) {
   const loadNearbyPlaces = async (lat, lng) => {
     setPlacesLoading(true);
     try {
-      addNotification('🔍 Searching for nearby tourist places...', 'info');
+      addNotification('🔍 Finding TOP tourist attractions in Punjab...', 'info');
       
-      const response = await placesAPI.getNearby(lat, lng);
+      const response = await placesAPI.getNearby(lat, lng, 50000); // 50km radius
       
       if (!response.data || !response.data.places || response.data.places.length === 0) {
-        addNotification('⚠️ No tourist places found nearby. Try different location.', 'warning');
+        addNotification('⚠️ No major tourist places found in Punjab.', 'warning');
         setNearbyPlaces([]);
         setShowPlaces(true);
         setPlacesLoading(false);
@@ -335,6 +323,68 @@ function Dashboard({ onLogout }) {
     } catch (err) {
       addNotification('❌ Error loading places. Check internet connection.', 'error');
       console.error('Places error:', err);
+      setNearbyPlaces([]);
+    } finally {
+      setPlacesLoading(false);
+    }
+  };
+
+  const fetchSafeZones = async () => {
+    if (!userLocation) {
+      addNotification('🔍 Getting your location... Please wait.', 'info');
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation({ lat: latitude, lng: longitude });
+          await loadSafeZones(latitude, longitude);
+        },
+        (error) => {
+          addNotification('❌ Location access denied. Enable GPS to find safe zones.', 'error');
+          console.error('Location error:', error);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+      return;
+    }
+    await loadSafeZones(userLocation.lat, userLocation.lng);
+  };
+
+  const loadSafeZones = async (lat, lng) => {
+    setPlacesLoading(true);
+    try {
+      addNotification('🏨 Searching for hotels within 20km...', 'info');
+      
+      const response = await placesAPI.getSafeZones(lat, lng, 20000); // 20km radius
+      
+      if (!response.data || !response.data.places || response.data.places.length === 0) {
+        addNotification('⚠️ No hotels found nearby. Try expanding search.', 'warning');
+        setNearbyPlaces([]);
+        setShowPlaces(true);
+        setPlacesLoading(false);
+        return;
+      }
+      
+      // Calculate real distances
+      const safeZonesWithDistance = response.data.places.map(place => {
+        const distanceMeters = calculateDistance(lat, lng, place.lat, place.lng);
+        const travelTime = estimateTravelTime(distanceMeters);
+        return {
+          ...place,
+          distanceMeters,
+          distance: formatDistance(distanceMeters),
+          travelTime
+        };
+      });
+      
+      // Sort by distance (nearest first)
+      safeZonesWithDistance.sort((a, b) => a.distanceMeters - b.distanceMeters);
+      
+      setNearbyPlaces(safeZonesWithDistance);
+      setShowPlaces(true);
+      addNotification(`✅ Found ${safeZonesWithDistance.length} hotels nearby!`, 'success');
+    } catch (err) {
+      addNotification('❌ Error loading hotels.', 'error');
+      console.error('Hotels error:', err);
       setNearbyPlaces([]);
     } finally {
       setPlacesLoading(false);
@@ -649,7 +699,11 @@ function Dashboard({ onLogout }) {
         </button>
         <button className="action-btn guide-btn" onClick={fetchNearbyPlaces} style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
           <span className="btn-icon">🗺️</span>
-          <span className="btn-text">Find Tourist Places</span>
+          <span className="btn-text">Tourist Places</span>
+        </button>
+        <button className="action-btn safe-zone-btn" onClick={fetchSafeZones} style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' }}>
+          <span className="btn-icon">🏨</span>
+          <span className="btn-text">Find Hotels</span>
         </button>
       </div>
 

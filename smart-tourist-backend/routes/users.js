@@ -8,9 +8,9 @@ const router = express.Router();
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
   } catch (err) {
-    console.error('Error fetching user:', err);
     return res.status(500).json({ message: 'Error fetching user', error: err.message });
   }
 });
@@ -19,16 +19,17 @@ router.get('/me', authMiddleware, async (req, res) => {
 router.post('/update-location', authMiddleware, async (req, res) => {
   try {
     const { lat, lng } = req.body;
+    if (!lat || !lng) return res.status(400).json({ message: 'Latitude and longitude required' });
+    
     const user = await User.findByIdAndUpdate(
       req.userId,
-      {
-        location: { lat, lng, updatedAt: new Date() }
-      },
+      { location: { lat, lng, updatedAt: new Date() } },
       { new: true }
     );
+    
+    if (!user) return res.status(404).json({ message: 'User not found' });
     res.json({ message: 'Location updated ✓', location: user.location });
   } catch (err) {
-    console.error('Error updating location:', err);
     return res.status(500).json({ message: 'Error updating location', error: err.message });
   }
 });
